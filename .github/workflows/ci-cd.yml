@@ -2,31 +2,65 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: 20
+          cache: npm
 
-      - name: Instalar dependências
-        run: npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Dar permissão ao Jest (se necessário)
-        run: chmod +x ./node_modules/.bin/jest
-
-      - name: Testar a aplicação
+      - name: Run tests
         run: npm test
 
-      - name: Build da imagem Docker
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/node-api-cicd
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t node-api:ci .
+
+      - name: Smoke test the container
         run: |
-          docker build -t node-api .
+          docker run -d --name api -p 3000:3000 node-api:ci
+          for i in $(seq 1 10); do curl -fs http://localhost:3000/health && break; sleep 1; done
+          curl -fs http://localhost:3000/metrics | grep -q process_cpu
+          docker rm -f api
+
+      # Publish only from main; pull requests stop after the smoke test
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image (sha + latest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_LC=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker tag node-api:ci "$IMAGE_LC:${GITHUB_SHA::7}"
+          docker tag node-api:ci "$IMAGE_LC:latest"
+          docker push "$IMAGE_LC:${GITHUB_SHA::7}"
+          docker push "$IMAGE_LC:latest"
