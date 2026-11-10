@@ -1,20 +1,18 @@
-# Usar a imagem oficial do Node.js
-FROM node:16
+FROM node:20-alpine
 
-# Definir o diretório de trabalho
+ENV NODE_ENV=production
 WORKDIR /app
 
-# Copiar arquivos de configuração
+# Install only production dependencies, using the lockfile for reproducible builds
 COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Instalar dependências
-RUN npm install
+COPY index.js ./
 
-# Copiar todo o código para o container
-COPY . .
+# Run as the non-root user that ships with the official image
+USER node
 
-# Expor a porta da aplicação
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:3000/health || exit 1
 
-# Comando para iniciar a aplicação
 CMD ["node", "index.js"]

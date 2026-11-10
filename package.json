@@ -1,21 +1,24 @@
 {
-  "name": "api",
+  "name": "node-api-cicd",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Node.js API with automated tests, Prometheus metrics and a GitHub Actions CI/CD pipeline",
   "dependencies": {
     "express": "^4.21.2",
-    "prom-client": "^15.1.3",
-    "wrappy": "^1.0.2"
+    "prom-client": "^15.1.3"
   },
   "devDependencies": {
     "jest": "^29.7.0",
     "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
